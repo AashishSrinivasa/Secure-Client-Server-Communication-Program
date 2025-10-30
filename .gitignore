@@ -1,0 +1,12 @@
+# C build artifacts
+c/*.o
+c/server
+c/client
+
+# Python bytecode
+**/__pycache__/
+**/*.pyc
+
+# Logs/tmp
+*.log
+/tmp/
