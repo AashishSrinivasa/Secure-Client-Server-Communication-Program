@@ -13,7 +13,6 @@
 
 #include "crypto.h"
 #include "net.h"
-#include "log.h"
 
 #define DEFAULT_PORT 5000
 #define BACKLOG 16
@@ -29,17 +28,18 @@ static void *client_thread(void *arg) {
 	client_ctx_t *ctx = (client_ctx_t *)arg;
 	char ipstr[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &ctx->addr.sin_addr, ipstr, sizeof(ipstr));
-	log_info("Client connected: %s:%d", ipstr, ntohs(ctx->addr.sin_port));
+	printf("[INFO] Client connected: %s:%d\n", ipstr, ntohs(ctx->addr.sin_port));
+	fflush(stdout);
 
 	for (;;) {
 		uint8_t *enc_payload = NULL;
 		uint32_t enc_len = 0;
 		int rc = recv_with_length(ctx->client_fd, &enc_payload, &enc_len);
 		if (rc == 1) {
-			log_info("Client disconnected: %s:%d", ipstr, ntohs(ctx->addr.sin_port));
+			printf("[INFO] Client disconnected: %s:%d\n", ipstr, ntohs(ctx->addr.sin_port));
 			break;
 		} else if (rc == -1) {
-			log_err("recv_with_length failed");
+			fprintf(stderr, "[ERROR] recv_with_length failed\n");
 			break;
 		}
 		if (enc_len == 0) {
@@ -49,7 +49,7 @@ static void *client_thread(void *arg) {
 
 		// Decrypt in place
 		if (xor_crypt(enc_payload, enc_len, DEFAULT_KEY, sizeof(DEFAULT_KEY) - 1) != 0) {
-			log_err("Decrypt failed");
+			fprintf(stderr, "[ERROR] Decrypt failed\n");
 			free(enc_payload);
 			break;
 		}
@@ -62,13 +62,14 @@ static void *client_thread(void *arg) {
 		}
 		memcpy(msg, enc_payload, enc_len);
 		msg[enc_len] = '\0';
-		log_recv("%s", msg);
+		printf("[RECV] %s\n", msg);
+		fflush(stdout);
 
 		// Prepare ACK plaintext
 		char ack_buf[256];
 		int n = snprintf(ack_buf, sizeof(ack_buf), "ACK: Received %u bytes", enc_len);
-		if (n < 0) n = 0;
-		uint32_t ack_len = (uint32_t) (n < 0 ? 0 : n);
+		if (n < 0 || n >= (int)sizeof(ack_buf)) n = 0;
+		uint32_t ack_len = (uint32_t)n;
 
 		uint8_t *ack_enc = (uint8_t *)malloc(ack_len);
 		if (!ack_enc) {
@@ -78,20 +79,21 @@ static void *client_thread(void *arg) {
 		}
 		memcpy(ack_enc, ack_buf, ack_len);
 		if (xor_crypt(ack_enc, ack_len, DEFAULT_KEY, sizeof(DEFAULT_KEY) - 1) != 0) {
-			log_err("Encrypt failed");
+			fprintf(stderr, "[ERROR] Encrypt failed\n");
 			free(enc_payload);
 			free(msg);
 			free(ack_enc);
 			break;
 		}
 		if (send_with_length(ctx->client_fd, ack_enc, ack_len) != 0) {
-			log_err("send_with_length failed");
+			fprintf(stderr, "[ERROR] send_with_length failed\n");
 			free(enc_payload);
 			free(msg);
 			free(ack_enc);
 			break;
 		}
-		log_send("ACK sent to client");
+		printf("[SEND] ACK sent to client\n");
+		fflush(stdout);
 
 		free(enc_payload);
 		free(msg);
@@ -152,7 +154,8 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	log_info("Listening on 0.0.0.0:%d", port);
+	printf("[INFO] Listening on 0.0.0.0:%d\n", port);
+	fflush(stdout);
 
 	while (keep_running) {
 		struct sockaddr_in cliaddr;
@@ -160,7 +163,7 @@ int main(int argc, char **argv) {
 		int cfd = accept(server_fd, (struct sockaddr *)&cliaddr, &clilen);
 		if (cfd < 0) {
 			if (errno == EINTR) continue;
-			log_err("accept failed");
+			fprintf(stderr, "[ERROR] accept failed\n");
 			break;
 		}
 		client_ctx_t *ctx = (client_ctx_t *)malloc(sizeof(client_ctx_t));
@@ -173,7 +176,7 @@ int main(int argc, char **argv) {
 
 		pthread_t tid;
 		if (pthread_create(&tid, NULL, client_thread, ctx) != 0) {
-			log_err("pthread_create failed");
+			fprintf(stderr, "[ERROR] pthread_create failed\n");
 			close(cfd);
 			free(ctx);
 			continue;
@@ -182,7 +185,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (server_fd >= 0) close(server_fd);
-	log_info("Server shutting down.");
+	printf("[INFO] Server shutting down.\n");
 	return 0;
 }
 

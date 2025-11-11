@@ -2,7 +2,7 @@ CC = cc
 CFLAGS = -Wall -Wextra -O2
 LDFLAGS = -lpthread
 
-OBJS_COMMON = crypto.o net.o log.o
+OBJS_COMMON = crypto.o net.o
 
 all: server client
 

@@ -5,12 +5,11 @@ from typing import Tuple
 
 from common import recv_with_length, send_with_length
 from crypto import xor_crypt, DEFAULT_KEY, to_str
-from logger import info, err, recv as log_recv, send as log_send
 
 
 def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
     ip, port = addr
-    info(f"Client connected: {ip}:{port}")
+    print(f"[INFO] Client connected: {ip}:{port}", flush=True)
     try:
         while True:
             enc = recv_with_length(conn)
@@ -21,18 +20,18 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
             buf = bytearray(enc)
             xor_crypt(buf, DEFAULT_KEY)
             msg = to_str(buf)
-            log_recv(f"{msg}")
+            print(f"[RECV] {msg}", flush=True)
 
             ack_text = f"ACK: Received {len(enc)} bytes"
             ack = bytearray(ack_text.encode("utf-8"))
             xor_crypt(ack, DEFAULT_KEY)
             send_with_length(conn, bytes(ack))
-            log_send("ACK sent to client")
+            print("[SEND] ACK sent to client", flush=True)
     except (ConnectionError, OSError) as e:
-        err(f"Client {ip}:{port} error: {e}")
+        print(f"[ERROR] Client {ip}:{port} error: {e}")
     finally:
         conn.close()
-        info(f"Client disconnected: {ip}:{port}")
+        print(f"[INFO] Client disconnected: {ip}:{port}")
 
 
 def main() -> None:
@@ -45,7 +44,7 @@ def main() -> None:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((args.host, args.port))
         s.listen(16)
-        info(f"Listening on {args.host}:{args.port}")
+        print(f"[INFO] Listening on {args.host}:{args.port}", flush=True)
         while True:
             conn, addr = s.accept()
             t = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)

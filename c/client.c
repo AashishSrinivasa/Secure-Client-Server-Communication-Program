@@ -10,7 +10,6 @@
 
 #include "crypto.h"
 #include "net.h"
-#include "log.h"
 
 static const uint8_t DEFAULT_KEY[] = "MY_SECRET_KEY";
 
@@ -30,7 +29,7 @@ static int connect_to_server(const char *host, int port) {
 		return -1;
 	}
 	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-		log_err("connect failed");
+		fprintf(stderr, "[ERROR] connect failed\n");
 		close(fd);
 		return -1;
 	}
@@ -47,19 +46,19 @@ static int send_message_and_get_ack(int fd, const char *message) {
 		return -1;
 	}
 	if (send_with_length(fd, payload, (uint32_t)len) != 0) {
-		log_err("send_with_length failed");
+		fprintf(stderr, "[ERROR] send_with_length failed\n");
 		free(payload);
 		return -1;
 	}
-	log_send("Encrypted bytes: %zu", len);
+	printf("[SEND] Encrypted bytes: %zu\n", len);
 	free(payload);
 
 	uint8_t *ack_enc = NULL;
 	uint32_t ack_len = 0;
 	int rc = recv_with_length(fd, &ack_enc, &ack_len);
 	if (rc != 0) {
-		if (rc == 1) log_info("Disconnected before ACK.");
-		else log_err("recv_with_length failed");
+		if (rc == 1) printf("[INFO] Disconnected before ACK.\n");
+		else fprintf(stderr, "[ERROR] recv_with_length failed\n");
 		return -1;
 	}
 	if (ack_len > 0 && xor_crypt(ack_enc, ack_len, DEFAULT_KEY, sizeof(DEFAULT_KEY) - 1) == 0) {
@@ -67,7 +66,7 @@ static int send_message_and_get_ack(int fd, const char *message) {
 		if (ack) {
 			memcpy(ack, ack_enc, ack_len);
 			ack[ack_len] = '\0';
-			log_recv("%s", ack);
+			printf("[RECV] %s\n", ack);
 			free(ack);
 		}
 	}
