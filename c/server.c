@@ -24,11 +24,25 @@ typedef struct {
 	struct sockaddr_in addr;
 } client_ctx_t;
 
+// ANSI color codes
+#define COLOR_RESET   "\033[0m"
+#define COLOR_GREEN   "\033[32m"
+#define COLOR_BLUE    "\033[34m"
+#define COLOR_CYAN    "\033[36m"
+#define COLOR_YELLOW  "\033[33m"
+#define COLOR_MAGENTA "\033[35m"
+#define COLOR_BOLD    "\033[1m"
+
 static void *client_thread(void *arg) {
 	client_ctx_t *ctx = (client_ctx_t *)arg;
 	char ipstr[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &ctx->addr.sin_addr, ipstr, sizeof(ipstr));
-	printf("[INFO] Client connected: %s:%d\n", ipstr, ntohs(ctx->addr.sin_port));
+	printf(COLOR_GREEN COLOR_BOLD "\n╔══════════════════════════════════════════════════════════╗\n" COLOR_RESET);
+	printf(COLOR_GREEN COLOR_BOLD "║" COLOR_RESET COLOR_CYAN COLOR_BOLD "              NEW CLIENT CONNECTION" COLOR_RESET COLOR_GREEN COLOR_BOLD "                 ║\n" COLOR_RESET);
+	printf(COLOR_GREEN COLOR_BOLD "╠══════════════════════════════════════════════════════════╣\n" COLOR_RESET);
+	printf(COLOR_GREEN COLOR_BOLD "║" COLOR_RESET " " COLOR_BOLD "Client:" COLOR_RESET " %-50s " COLOR_GREEN COLOR_BOLD "║\n" COLOR_RESET, ipstr);
+	printf(COLOR_GREEN COLOR_BOLD "║" COLOR_RESET " " COLOR_BOLD "Port:" COLOR_RESET " %-52d " COLOR_GREEN COLOR_BOLD "║\n" COLOR_RESET, ntohs(ctx->addr.sin_port));
+	printf(COLOR_GREEN COLOR_BOLD "╚══════════════════════════════════════════════════════════╝\n" COLOR_RESET);
 	fflush(stdout);
 
 	for (;;) {
@@ -36,10 +50,12 @@ static void *client_thread(void *arg) {
 		uint32_t enc_len = 0;
 		int rc = recv_with_length(ctx->client_fd, &enc_payload, &enc_len);
 		if (rc == 1) {
-			printf("[INFO] Client disconnected: %s:%d\n", ipstr, ntohs(ctx->addr.sin_port));
+			printf(COLOR_YELLOW COLOR_BOLD "\n╔══════════════════════════════════════════════════════════╗\n" COLOR_RESET);
+			printf(COLOR_YELLOW COLOR_BOLD "║" COLOR_RESET " " COLOR_BOLD "Client Disconnected:" COLOR_RESET " %-37s " COLOR_YELLOW COLOR_BOLD "║\n" COLOR_RESET, ipstr);
+			printf(COLOR_YELLOW COLOR_BOLD "╚══════════════════════════════════════════════════════════╝\n" COLOR_RESET);
 			break;
 		} else if (rc == -1) {
-			fprintf(stderr, "[ERROR] recv_with_length failed\n");
+			fprintf(stderr, COLOR_BOLD "[✗ ERROR] " COLOR_RESET "recv_with_length failed\n");
 			break;
 		}
 		if (enc_len == 0) {
@@ -49,7 +65,7 @@ static void *client_thread(void *arg) {
 
 		// Decrypt in place
 		if (xor_crypt(enc_payload, enc_len, DEFAULT_KEY, sizeof(DEFAULT_KEY) - 1) != 0) {
-			fprintf(stderr, "[ERROR] Decrypt failed\n");
+			fprintf(stderr, COLOR_BOLD "[✗ ERROR] " COLOR_RESET "Decrypt failed\n");
 			free(enc_payload);
 			break;
 		}
@@ -62,7 +78,13 @@ static void *client_thread(void *arg) {
 		}
 		memcpy(msg, enc_payload, enc_len);
 		msg[enc_len] = '\0';
-		printf("[RECV] %s\n", msg);
+		printf(COLOR_BLUE COLOR_BOLD "┌─ MESSAGE RECEIVED ────────────────────────────────────┐\n" COLOR_RESET);
+		printf(COLOR_BLUE "│ " COLOR_RESET COLOR_BOLD "From:" COLOR_RESET " %-47s " COLOR_BLUE "│\n" COLOR_RESET, ipstr);
+		printf(COLOR_BLUE "│ " COLOR_RESET COLOR_BOLD "Size:" COLOR_RESET " %-47u bytes " COLOR_BLUE "│\n" COLOR_RESET, enc_len);
+		printf(COLOR_BLUE "│ " COLOR_RESET COLOR_BOLD "Status:" COLOR_RESET COLOR_GREEN " ✓ Decrypted Successfully" COLOR_RESET "            " COLOR_BLUE "│\n" COLOR_RESET);
+		printf(COLOR_BLUE "├──────────────────────────────────────────────────────────┤\n" COLOR_RESET);
+		printf(COLOR_BLUE "│ " COLOR_RESET COLOR_BOLD "Message:" COLOR_RESET " %-45s " COLOR_BLUE "│\n" COLOR_RESET, msg);
+		printf(COLOR_BLUE "└──────────────────────────────────────────────────────────┘\n" COLOR_RESET);
 		fflush(stdout);
 
 		// Prepare ACK plaintext
@@ -86,13 +108,16 @@ static void *client_thread(void *arg) {
 			break;
 		}
 		if (send_with_length(ctx->client_fd, ack_enc, ack_len) != 0) {
-			fprintf(stderr, "[ERROR] send_with_length failed\n");
+			fprintf(stderr, COLOR_BOLD "[✗ ERROR] " COLOR_RESET "send_with_length failed\n");
 			free(enc_payload);
 			free(msg);
 			free(ack_enc);
 			break;
 		}
-		printf("[SEND] ACK sent to client\n");
+		printf(COLOR_MAGENTA COLOR_BOLD "┌─ ACKNOWLEDGMENT SENT ──────────────────────────────────┐\n" COLOR_RESET);
+		printf(COLOR_MAGENTA "│ " COLOR_RESET COLOR_BOLD "Response:" COLOR_RESET " %-42s " COLOR_MAGENTA "│\n" COLOR_RESET, ack_buf);
+		printf(COLOR_MAGENTA "│ " COLOR_RESET COLOR_BOLD "Status:" COLOR_RESET COLOR_GREEN " ✓ Encrypted & Sent" COLOR_RESET "                    " COLOR_MAGENTA "│\n" COLOR_RESET);
+		printf(COLOR_MAGENTA "└──────────────────────────────────────────────────────────┘\n" COLOR_RESET);
 		fflush(stdout);
 
 		free(enc_payload);
@@ -154,7 +179,14 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	printf("[INFO] Listening on 0.0.0.0:%d\n", port);
+	printf(COLOR_CYAN COLOR_BOLD "\n╔══════════════════════════════════════════════════════════╗\n" COLOR_RESET);
+	printf(COLOR_CYAN COLOR_BOLD "║" COLOR_RESET COLOR_BOLD "              SECURE SERVER STARTED" COLOR_RESET COLOR_CYAN COLOR_BOLD "                  ║\n" COLOR_RESET);
+	printf(COLOR_CYAN COLOR_BOLD "╠══════════════════════════════════════════════════════════╣\n" COLOR_RESET);
+	printf(COLOR_CYAN COLOR_BOLD "║" COLOR_RESET " " COLOR_BOLD "Status:" COLOR_RESET COLOR_GREEN " ✓ Listening" COLOR_RESET "                                      " COLOR_CYAN COLOR_BOLD "║\n" COLOR_RESET);
+	printf(COLOR_CYAN COLOR_BOLD "║" COLOR_RESET " " COLOR_BOLD "Address:" COLOR_RESET " 0.0.0.0:%-43d " COLOR_CYAN COLOR_BOLD "║\n" COLOR_RESET, port);
+	printf(COLOR_CYAN COLOR_BOLD "║" COLOR_RESET " " COLOR_BOLD "Protocol:" COLOR_RESET " TCP with XOR Encryption                      " COLOR_CYAN COLOR_BOLD "║\n" COLOR_RESET);
+	printf(COLOR_CYAN COLOR_BOLD "╚══════════════════════════════════════════════════════════╝\n" COLOR_RESET);
+	printf(COLOR_YELLOW "\nWaiting for clients...\n" COLOR_RESET);
 	fflush(stdout);
 
 	while (keep_running) {
@@ -185,7 +217,9 @@ int main(int argc, char **argv) {
 	}
 
 	if (server_fd >= 0) close(server_fd);
-	printf("[INFO] Server shutting down.\n");
+	printf(COLOR_YELLOW COLOR_BOLD "\n╔══════════════════════════════════════════════════════════╗\n" COLOR_RESET);
+	printf(COLOR_YELLOW COLOR_BOLD "║" COLOR_RESET " " COLOR_BOLD "Server shutting down..." COLOR_RESET "                              " COLOR_YELLOW COLOR_BOLD "║\n" COLOR_RESET);
+	printf(COLOR_YELLOW COLOR_BOLD "╚══════════════════════════════════════════════════════════╝\n" COLOR_RESET);
 	return 0;
 }
 

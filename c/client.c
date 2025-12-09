@@ -36,6 +36,14 @@ static int connect_to_server(const char *host, int port) {
 	return fd;
 }
 
+// ANSI color codes
+#define COLOR_RESET   "\033[0m"
+#define COLOR_GREEN   "\033[32m"
+#define COLOR_BLUE    "\033[34m"
+#define COLOR_CYAN    "\033[36m"
+#define COLOR_YELLOW  "\033[33m"
+#define COLOR_BOLD    "\033[1m"
+
 static int send_message_and_get_ack(int fd, const char *message) {
 	size_t len = strlen(message);
 	uint8_t *payload = (uint8_t *)malloc(len);
@@ -46,19 +54,23 @@ static int send_message_and_get_ack(int fd, const char *message) {
 		return -1;
 	}
 	if (send_with_length(fd, payload, (uint32_t)len) != 0) {
-		fprintf(stderr, "[ERROR] send_with_length failed\n");
+		fprintf(stderr, COLOR_BOLD "[✗ ERROR] " COLOR_RESET "send_with_length failed\n");
 		free(payload);
 		return -1;
 	}
-	printf("[SEND] Encrypted bytes: %zu\n", len);
+	printf(COLOR_CYAN COLOR_BOLD "┌─ MESSAGE SENT ─────────────────────────────────────┐\n" COLOR_RESET);
+	printf(COLOR_CYAN "│ " COLOR_RESET COLOR_BOLD "Message:" COLOR_RESET " %-45s " COLOR_CYAN "│\n" COLOR_RESET, message);
+	printf(COLOR_CYAN "│ " COLOR_RESET COLOR_BOLD "Size:" COLOR_RESET " %-47zu bytes " COLOR_CYAN "│\n" COLOR_RESET, len);
+	printf(COLOR_CYAN "│ " COLOR_RESET COLOR_BOLD "Status:" COLOR_RESET COLOR_GREEN " ✓ Encrypted & Sent" COLOR_RESET "                    " COLOR_CYAN "│\n" COLOR_RESET);
+	printf(COLOR_CYAN "└──────────────────────────────────────────────────────────┘\n" COLOR_RESET);
 	free(payload);
 
 	uint8_t *ack_enc = NULL;
 	uint32_t ack_len = 0;
 	int rc = recv_with_length(fd, &ack_enc, &ack_len);
 	if (rc != 0) {
-		if (rc == 1) printf("[INFO] Disconnected before ACK.\n");
-		else fprintf(stderr, "[ERROR] recv_with_length failed\n");
+		if (rc == 1) printf(COLOR_YELLOW "[ℹ INFO] " COLOR_RESET "Disconnected before ACK.\n");
+		else fprintf(stderr, COLOR_BOLD "[✗ ERROR] " COLOR_RESET "recv_with_length failed\n");
 		return -1;
 	}
 	if (ack_len > 0 && xor_crypt(ack_enc, ack_len, DEFAULT_KEY, sizeof(DEFAULT_KEY) - 1) == 0) {
@@ -66,7 +78,10 @@ static int send_message_and_get_ack(int fd, const char *message) {
 		if (ack) {
 			memcpy(ack, ack_enc, ack_len);
 			ack[ack_len] = '\0';
-			printf("[RECV] %s\n", ack);
+			printf(COLOR_GREEN COLOR_BOLD "┌─ ACKNOWLEDGMENT RECEIVED ────────────────────────────┐\n" COLOR_RESET);
+			printf(COLOR_GREEN "│ " COLOR_RESET COLOR_BOLD "Response:" COLOR_RESET " %-42s " COLOR_GREEN "│\n" COLOR_RESET, ack);
+			printf(COLOR_GREEN "│ " COLOR_RESET COLOR_BOLD "Status:" COLOR_RESET COLOR_GREEN " ✓ Decrypted Successfully" COLOR_RESET "              " COLOR_GREEN "│\n" COLOR_RESET);
+			printf(COLOR_GREEN "└──────────────────────────────────────────────────────────┘\n" COLOR_RESET);
 			free(ack);
 		}
 	}
@@ -98,9 +113,12 @@ int main(int argc, char **argv) {
 	} else {
 		// Interactive mode
 		char line[1024];
-		printf("Enter messages (empty line to quit):\n");
+		printf(COLOR_BLUE COLOR_BOLD "\n╔══════════════════════════════════════════════════════════╗\n" COLOR_RESET);
+		printf(COLOR_BLUE COLOR_BOLD "║" COLOR_RESET COLOR_CYAN COLOR_BOLD "          SECURE CLIENT - INTERACTIVE MODE" COLOR_RESET COLOR_BLUE COLOR_BOLD "          ║\n" COLOR_RESET);
+		printf(COLOR_BLUE COLOR_BOLD "╚══════════════════════════════════════════════════════════╝\n\n" COLOR_RESET);
+		printf(COLOR_YELLOW "Enter messages (empty line to quit):\n" COLOR_RESET);
 		for (;;) {
-			printf("> ");
+			printf(COLOR_CYAN COLOR_BOLD "→ " COLOR_RESET);
 			fflush(stdout);
 			if (!fgets(line, sizeof(line), stdin)) break;
 			size_t L = strlen(line);
@@ -108,7 +126,9 @@ int main(int argc, char **argv) {
 				line[--L] = '\0';
 			}
 			if (L == 0) break;
+			printf("\n");
 			if (send_message_and_get_ack(fd, line) != 0) break;
+			printf("\n");
 		}
 	}
 
